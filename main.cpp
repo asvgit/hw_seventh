@@ -3,7 +3,107 @@
 #include <vector>
 #include <memory>
 
-using string = std::string;
+namespace utf8 {
+class String {
+	using string = std::string;
+public:
+	String() : m_str() {}
+	String(const char *str) : m_str(str) {}
+	String(const string &str) : m_str(str) {}
+	String(string &&str) : m_str(std::move(str)) {}
+	class iterator : public std::iterator<std::bidirectional_iterator_tag, int, int, char *, int> {
+		private:
+			string::const_iterator it;
+		public:
+			template <typename Type>
+			inline iterator(const Type & i): it(i) {}
+			template <typename Type>
+			inline iterator & operator = (Type & i) { it = i; return *this; }
+			template <typename Type>
+			inline bool operator == (Type i) const { return i == it; }
+			template <typename Type>
+			inline bool operator != (Type i) const { return i != it; }
+			iterator& operator ++() {
+				auto ch = (unsigned char)*it;
+				if (ch >= 0x80) {
+					while (ch & 0x80) {
+						ch <<= 1;
+						++it;
+					}
+				} else
+					++it;
+				return *this;
+			}
+			string operator *() const {
+				int mask = 0x80, ch = *it, i;
+				for (i = 0; ch & mask; ++i)
+					mask>>=1;
+				return string(&(*it), i ? i : 1);
+			}
+	};
+	iterator begin() const { return iterator(m_str.begin()); }
+	iterator end() const { return iterator(m_str.end()); }
+
+	bool empty() const { return m_str.empty(); }
+	size_t size() const { return std::distance(begin(), end()); }
+	string operator [](const size_t i) const {
+		auto ind(i);
+		if (m_str.empty())
+			throw std::out_of_range("utf8 oper[] empty");
+		auto e = begin();
+		while (ind) {
+			++e;
+			if (e == m_str.end())
+				throw std::out_of_range("utf8 oper[]");
+			--ind;
+		}
+		return *e;
+	}
+	string operator +=(const String &str) {
+		m_str += str.m_str;
+		return m_str;
+	}
+	string operator +(const String &str) const {
+		return m_str + str.m_str;
+	}
+	operator string() const {
+		return m_str;
+	}
+	string front() const {
+		if (m_str.empty())
+			throw std::out_of_range("utf8 front");
+		return *begin();
+	}
+	string substr(const size_t i) const {
+		string res;
+		auto ind(0);
+		if (m_str.empty())
+			return "";
+		auto e = begin();
+		// res += *begin();
+		while (ind < size()) {
+			if (e == m_str.end())
+				throw std::out_of_range("utf8 substr");
+			if (ind++ < i) {
+				++e;
+				continue;
+			}
+			res += *e;
+			++e;
+		}
+		return res;
+	}
+private:
+	string m_str;
+};
+}
+
+using string = utf8::String;
+
+std::ostream& operator<<(std::ostream& os, const string& obj) {
+	os << obj.substr(0);
+	return os;
+}
 
 class RadixTree {
 	using RTPtr = std::unique_ptr<RadixTree>;
@@ -23,7 +123,7 @@ public:
 		if (eq_part.size() == m_value.size()) {
 			const string tail = val.substr(eq_part.size());
 			for (auto &ptr : m_nodes) {
-				if (ptr->GetRootVal()[0] == tail[0]) {
+				if (ptr->GetRootVal().front() == tail.front()) {
 					ptr->Insert(tail);
 					return;
 				}
@@ -46,7 +146,7 @@ public:
 	void PrintNickname(const string &prefix = "") {
 		if (m_is_elem)
 			std::cout << prefix + m_value
-				<< " " + prefix + m_value[0]
+				<< " " + (std::string)prefix + m_value.front()
 				<< std::endl;
 		for (auto &node : m_nodes)
 			node->PrintNickname(prefix + m_value);
@@ -84,7 +184,7 @@ private:
 int main() {
 	try {
 		RadixTree rt;
-		for (string line; std::getline(std::cin, line);) {
+		for (std::string line; std::getline(std::cin, line);) {
 			rt.Insert(line);
 		}
 		rt.PrintNickname();
