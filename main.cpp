@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <map>
 #include <memory>
 
 namespace utf8 {
@@ -105,11 +106,11 @@ std::ostream& operator<<(std::ostream& os, const string& obj) {
 	return os;
 }
 
-class RadixTree {
-	using RTPtr = std::unique_ptr<RadixTree>;
+class RadixTreeNode {
 public:
-	RadixTree() {}
-	RadixTree(const string& val, const bool is_val = true) : m_value(val), m_is_elem(is_val) {}
+	using RTNPtr = std::unique_ptr<RadixTreeNode>;
+	RadixTreeNode() {}
+	RadixTreeNode(const string& val, const bool is_val = true) : m_value(val), m_is_elem(is_val) {}
 
 	void Insert(const string &val) {
 		if (val.empty())
@@ -122,25 +123,23 @@ public:
 		const string eq_part = GetEq(val);
 		if (eq_part.size() == m_value.size()) {
 			const string tail = val.substr(eq_part.size());
-			for (auto &ptr : m_nodes) {
-				if (ptr->GetRootVal().front() == tail.front()) {
-					ptr->Insert(tail);
-					return;
-				}
+			if (m_nodes[tail.front()] == nullptr) {
+				m_nodes[tail.front()] = std::make_unique<RadixTreeNode>(tail);
+				return;
 			}
-			m_nodes.push_back(std::make_unique<RadixTree>(tail));
+			m_nodes[tail.front()]->Insert(tail);
 			return;
 		}
 
-		std::vector<RTPtr> nodes;
+		std::map<std::string, RTNPtr> nodes;
 		std::swap(m_nodes, nodes);
 		const string tail = m_value.substr(eq_part.size());
-		m_nodes.push_back(std::make_unique<RadixTree>(tail, m_is_elem));
-		std::swap(m_nodes.front()->m_nodes, nodes);
+		m_nodes.insert({tail.front(), std::make_unique<RadixTreeNode>(tail, m_is_elem)});
+		std::swap(m_nodes[tail.front()]->m_nodes, nodes);
 		m_value = eq_part;
 		m_is_elem = eq_part.size() == val.size();
 		if (!m_is_elem)
-			m_nodes.push_back(std::make_unique<RadixTree>(val.substr(eq_part.size())));
+			m_nodes.insert({val.front(), std::make_unique<RadixTreeNode>(val.substr(eq_part.size()))});
 	}
 
 	void PrintNickname(const string &prefix = "") {
@@ -149,24 +148,31 @@ public:
 				<< " " + (std::string)prefix + m_value.front()
 				<< std::endl;
 		for (auto &node : m_nodes)
-			node->PrintNickname(prefix + m_value);
+			node.second->PrintNickname(prefix + m_value);
 	}
 
 	void Print(const string &prefix = "", const bool is_last = true) {
 		if (!m_value.empty()) {
 			std::cout << prefix << (is_last ? "└" : "├")
 				<< m_value << (m_is_elem ? "$" : "") << std::endl;
-			for (auto &node : m_nodes)
-				node->Print(prefix + (is_last ? " " : "│")
-						, &node == &m_nodes.back());
-		} else
-			for (auto &node : m_nodes)
-				node->Print("", &node == &m_nodes.back());
+			int i = 0;
+			for (auto &node : m_nodes) {
+				++i;
+				node.second->Print(prefix + (is_last ? " " : "│")
+						, i == m_nodes.size());
+			}
+		} else {
+			int i = 0;
+			for (auto &node : m_nodes) {
+				++i;
+				node.second->Print("", i == m_nodes.size());
+			}
+		}
 	}
 
 	string GetRootVal() { return m_value; }
 
-	std::vector<RTPtr> m_nodes;
+	std::map<std::string, RTNPtr> m_nodes;
 private:
 	string m_value;
 	bool m_is_elem = false;
@@ -178,6 +184,28 @@ private:
 			if (m_value[i] == val[i])
 				result += m_value[i];
 		return result;
+	}
+};
+
+class RadixTree {
+	RadixTreeNode::RTNPtr root;
+public:
+	void Insert(const string &str) {
+		if (root == nullptr) {
+			root = std::make_unique<RadixTreeNode>(str);
+			return;
+		}
+		root->Insert(str);
+	}
+	void PrintNickname() {
+		if (root == nullptr)
+			return;
+		root->PrintNickname();
+	}
+	void Print() {
+		if (root == nullptr)
+			return;
+		root->Print();
 	}
 };
 
