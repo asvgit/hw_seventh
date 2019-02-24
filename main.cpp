@@ -180,9 +180,11 @@ private:
 	string GetEq(const string &val) {
 		const int size = std::min(m_value.size(), val.size());
 		string result;
-		for (int i = 0; i < size; ++i)
-			if (m_value[i] == val[i])
-				result += m_value[i];
+		for (int i = 0; i < size; ++i) {
+			if (m_value[i] != val[i])
+				break;
+			result += m_value[i];
+		}
 		return result;
 	}
 };
